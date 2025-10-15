@@ -15,7 +15,7 @@ const getTradingViewSymbol = (pair: string): string => {
         'NZD/USD': 'FX:NZDUSD',
         // Crypto - Using Coinbase for broad availability
         'BTC/USD': 'COINBASE:BTCUSD', 'ETH/USD': 'COINBASE:ETHUSD', 'SOL/USD': 'COINBASE:SOLUSD',
-        'XRP/USD': 'COINBASE:XRPUSD', 'DOGE/USD': 'COINBASE:DOGEUSD', 'ADA/USD': 'COINBASE:ADAUSD',
+        'XRP/USD': 'COINBASE:XRPUSD', 'DOGE/USD': 'COINBASE:DOGEUSD', 'ADA/USD': 'COINBASE:ADABTC',
         'BNB/USD': 'BINANCE:BNBUSD', 'TRX/USD': 'BINANCE:TRXUSD',
         // New Crypto Cross-Pairs
         'ETH/BTC': 'COINBASE:ETHBTC',
@@ -50,56 +50,47 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ selectedPair }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!containerRef.current || !selectedPair) {
+        const container = containerRef.current;
+        if (!container || !selectedPair) {
             return;
         }
 
-        const container = containerRef.current;
+        const script = document.createElement('script');
+        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+        script.type = 'text/javascript';
+        script.async = true;
         
-        // Use a timeout to ensure the container has its final dimensions before the script runs.
-        // This can prevent race conditions and initialization errors with the TradingView widget.
-        const timerId = setTimeout(() => {
-            // Check if the container still exists before proceeding
-            if (!containerRef.current) return;
+        const widgetConfig = {
+            "autosize": true,
+            "symbol": getTradingViewSymbol(selectedPair.value),
+            "interval": "15",
+            "timezone": "Etc/UTC",
+            "theme": "dark",
+            "style": "1",
+            "locale": "en",
+            "enable_publishing": false,
+            "withdateranges": true,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": false,
+            "details": true,
+            "hotlist": true,
+            "calendar": true,
+            "backgroundColor": "rgba(22, 27, 34, 1)",
+            "gridColor": "rgba(43, 43, 67, 0.6)",
+        };
+        
+        // Using textContent is a safer way to inject the config JSON.
+        // This avoids the setTimeout race condition.
+        script.textContent = JSON.stringify(widgetConfig);
 
-            // Clear any previous widget before creating a new one
-            container.innerHTML = '';
+        // Clear previous widget and append the new one.
+        container.innerHTML = '';
+        container.appendChild(script);
 
-            const script = document.createElement('script');
-            script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-            script.type = 'text/javascript';
-            script.async = true;
-            
-            const widgetConfig = {
-                "autosize": true,
-                "symbol": getTradingViewSymbol(selectedPair.value),
-                "interval": "15",
-                "timezone": "Etc/UTC",
-                "theme": "dark",
-                "style": "1",
-                "locale": "en",
-                "enable_publishing": false,
-                "withdateranges": true,
-                "hide_side_toolbar": false,
-                "allow_symbol_change": false, // Lock symbol to what's passed in
-                "details": true,
-                "hotlist": true,
-                "calendar": true,
-                "backgroundColor": "rgba(22, 27, 34, 1)", // Match #161B22
-                "gridColor": "rgba(43, 43, 67, 0.6)", // Match #2B2B43
-            };
-            
-            script.innerHTML = JSON.stringify(widgetConfig);
-            
-            container.appendChild(script);
-
-        }, 0);
-
-        // Cleanup function to clear timeout and widget on unmount or re-render
+        // Cleanup function for when the component unmounts.
         return () => {
-            clearTimeout(timerId);
-            if (containerRef.current) {
-                containerRef.current.innerHTML = '';
+            if (container) {
+                container.innerHTML = '';
             }
         };
     }, [selectedPair]);

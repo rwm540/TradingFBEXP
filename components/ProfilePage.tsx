@@ -4,7 +4,7 @@ import type { UserProfile } from '../types';
 interface ProfilePageProps {
     userProfile: UserProfile;
     onUpdateProfile: (newProfile: UserProfile) => void;
-    onChangePassword: (current: string, newPass: string) => void;
+    onChangePassword: (current: string, newPass: string) => { success: boolean, message: string };
 }
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, onUpdateProfile, onChangePassword }) => {
@@ -40,16 +40,23 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, onUpdateProfile,
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64String = reader.result as string;
+                // Only update the local state for the preview.
+                // The actual save will happen when the user clicks "Save Profile Changes".
                 setProfilePicture(base64String);
-                // Immediately update profile to save picture to localStorage
-                onUpdateProfile({ ...userProfile, firstName, lastName, username, email, profilePicture: base64String });
             };
             reader.readAsDataURL(file);
         }
     };
 
     const handleSaveChanges = () => {
-        onUpdateProfile({ ...userProfile, username, firstName, lastName, email, profilePicture });
+        // Construct the profile object from the component's local state, which is the source of truth.
+        onUpdateProfile({ 
+            username, 
+            firstName, 
+            lastName, 
+            email, 
+            profilePicture 
+        });
     };
     
     const handleChangePasswordClick = () => {
@@ -61,11 +68,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, onUpdateProfile,
             alert('New passwords do not match.');
             return;
         }
-        onChangePassword(currentPassword, newPassword);
-        // Clear fields after submission for security
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+        const result = onChangePassword(currentPassword, newPassword);
+        if (result.success) {
+             // Clear fields after successful submission for security
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        }
+        // Alert is handled by App.tsx, which shows success or failure.
     };
 
     // Reusable Card component for consistent styling
@@ -89,7 +99,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userProfile, onUpdateProfile,
                         <img src={profilePicture} alt="Profile Preview" className="w-24 h-24 rounded-full object-cover border-2 border-blue-500" />
                     ) : (
                         <div className="w-24 h-24 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 text-4xl font-bold">
-                             {(firstName || 'U').charAt(0).toUpperCase()}
+                             {(firstName || userProfile.username || 'U').charAt(0).toUpperCase()}
                         </div>
                     )}
                     <div>

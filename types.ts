@@ -133,3 +133,11 @@ export interface UserProfile {
     email: string;
     profilePicture: string | null; // Base64 encoded string
 }
+
+// FIX: Add and export the UserCredentials interface.
+export interface UserCredentials {
+    username: string;
+    email: string;
+    password: string;
+    profile: UserProfile;
+}

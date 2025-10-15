@@ -3,10 +3,10 @@ import React, { useState } from 'react';
 interface FundWalletModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onFund: (amount: number) => void;
+    onDeposit: (amount: number, txHash: string) => void;
 }
 
-const FundWalletModal: React.FC<FundWalletModalProps> = ({ isOpen, onClose, onFund }) => {
+const FundWalletModal: React.FC<FundWalletModalProps> = ({ isOpen, onClose, onDeposit }) => {
     const [amount, setAmount] = useState('');
 
     if (!isOpen) return null;
@@ -17,7 +17,7 @@ const FundWalletModal: React.FC<FundWalletModalProps> = ({ isOpen, onClose, onFu
             alert('Please enter a valid amount between $1.00 and $1,000,000.');
             return;
         }
-        onFund(fundAmount);
+        onDeposit(fundAmount, 'Manual Addition');
         setAmount('');
     };
 

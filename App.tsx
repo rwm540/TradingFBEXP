@@ -1,9 +1,7 @@
-
-
 import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Header from './components/Header';
 import LoadingSpinner from './components/LoadingSpinner';
-import type { Currency, Trade, NewOrderRequest, AssetType, OptionTrade, NewOptionOrderRequest, WalletAsset, TradingCurrency, StakingPool, UserStake, LotteryPool, UserLotteryTicket, WalletTransaction, UserProfile } from './types';
+import type { Currency, Trade, NewOrderRequest, AssetType, OptionTrade, NewOptionOrderRequest, WalletAsset, TradingCurrency, StakingPool, UserStake, LotteryPool, UserLotteryTicket, WalletTransaction, UserProfile, UserCredentials } from './types';
 import { currencyPairs, cryptoPairs, stockSymbols, commodityPairs, initialAssetsData, allTradablePairs, initialStakingPools, initialLotteryPools } from './constants';
 import type { OrderConfirmationDetails } from './components/ConfirmationModal';
 import type { OptionConfirmationDetails } from './components/OptionConfirmationModal';
@@ -29,46 +27,143 @@ const StakingHistoryPage = React.lazy(() => import('./components/StakingHistoryP
 const LotteryHistoryPage = React.lazy(() => import('./components/LotteryHistoryPage'));
 const WalletHistoryPage = React.lazy(() => import('./components/WalletHistoryPage'));
 const ProfilePage = React.lazy(() => import('./components/ProfilePage'));
+const DepositWithdrawPage = React.lazy(() => import('./components/DepositWithdrawPage'));
+const AuthPage = React.lazy(() => import('./components/AuthPage'));
 
 
 export type TradingMode = 'demo' | 'live';
-export type View = 'trade' | 'tradeOption' | 'stacking' | 'lottery' | 'wallet' | 'tradeHistory' | 'optionHistory' | 'stakingHistory' | 'lotteryHistory' | 'walletHistory' | 'profile';
+export type View = 'trade' | 'tradeOption' | 'stacking' | 'lottery' | 'wallet' | 'tradeHistory' | 'optionHistory' | 'stakingHistory' | 'lotteryHistory' | 'walletHistory' | 'profile' | 'depositWithdraw';
 
 function App() {
+  // --- Auth State ---
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
   const [view, setView] = useState<View>('trade');
   const [tradingMode, setTradingMode] = useState<TradingMode>('demo');
   const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // --- User Profile State ---
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    username: 'User One',
-    firstName: 'User',
-    lastName: 'One',
-    email: 'user.one@example.com',
-    profilePicture: null, // Will store a Base64 string
+    username: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    profilePicture: null,
   });
   
-  // Load user profile from localStorage on initial mount
+  // --- Auth Logic ---
+  const loadUsersFromStorage = (): Record<string, UserCredentials> => {
+    try {
+      const storedUsers = localStorage.getItem('app_users');
+      return storedUsers ? JSON.parse(storedUsers) : {};
+    } catch (e) {
+      console.error("Failed to parse users from localStorage", e);
+      return {};
+    }
+  };
+  
+  const handleRegister = (username: string, email: string, password: string): { success: boolean, message: string } => {
+    const users = loadUsersFromStorage();
+    if (users[username]) {
+        return { success: false, message: 'Username is already taken.' };
+    }
+    if (Object.values(users).some(user => user.email === email)) {
+        return { success: false, message: 'An account with this email already exists.' };
+    }
+
+    const newUser: UserCredentials = {
+      username,
+      email,
+      password, // In a real app, this would be hashed
+      profile: {
+        username,
+        email,
+        firstName: '',
+        lastName: '',
+        profilePicture: null
+      }
+    };
+    users[username] = newUser;
+    
+    try {
+        localStorage.setItem('app_users', JSON.stringify(users));
+        handleLogin(username, password); // Automatically log in after registration
+        return { success: true, message: 'Registration successful!' };
+    } catch (error) {
+        console.error("Failed to save users to localStorage", error);
+        return { success: false, message: 'An error occurred during registration.' };
+    }
+  };
+
+  const handleLogin = (identifier: string, password: string): { success: boolean, message: string } => {
+      const users = loadUsersFromStorage();
+      const user = Object.values(users).find(u => (u.username === identifier || u.email === identifier));
+      
+      if (user && user.password === password) {
+          setIsAuthenticated(true);
+          setCurrentUser(user.username);
+          setUserProfile(user.profile);
+          try {
+              localStorage.setItem('app_session', JSON.stringify({ username: user.username }));
+          } catch (error) {
+               console.error("Failed to save session to localStorage", error);
+          }
+          return { success: true, message: 'Login successful!' };
+      }
+      return { success: false, message: 'Invalid username/email or password.' };
+  };
+
+  const handleLogout = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      handleDisconnectWallet(); // Disconnect wallet on logout
+      setView('trade');
+      setIsSidebarOpen(false);
+      try {
+          localStorage.removeItem('app_session');
+      } catch (error) {
+          console.error("Failed to remove session from localStorage", error);
+      }
+  };
+
+  // Check for active session on initial mount
   useEffect(() => {
     try {
-      const savedProfile = localStorage.getItem('userProfile');
-      if (savedProfile) {
-        setUserProfile(JSON.parse(savedProfile));
-      }
+        const session = localStorage.getItem('app_session');
+        if (session) {
+            const { username } = JSON.parse(session);
+            if (username) {
+                const users = loadUsersFromStorage();
+                const user = users[username];
+                if (user) {
+                    setIsAuthenticated(true);
+                    setCurrentUser(user.username);
+                    setUserProfile(user.profile);
+                }
+            }
+        }
     } catch (error) {
-      console.error("Failed to parse user profile from localStorage", error);
+        console.error("Failed to parse session from localStorage", error);
     }
   }, []);
 
   // Save user profile to localStorage whenever it changes
   useEffect(() => {
-    try {
-      localStorage.setItem('userProfile', JSON.stringify(userProfile));
-    } catch (error) {
-      console.error("Failed to save user profile to localStorage", error);
+    if (currentUser) {
+        try {
+            const users = loadUsersFromStorage();
+            if (users[currentUser]) {
+                users[currentUser].profile = userProfile;
+                localStorage.setItem('app_users', JSON.stringify(users));
+            }
+        } catch (error) {
+            console.error("Failed to save user profile to localStorage", error);
+        }
     }
-  }, [userProfile]);
+  }, [userProfile, currentUser]);
 
 
   // --- Multi-Currency Balances ---
@@ -218,13 +313,11 @@ function App() {
     
     if (twelveDataSymbols.length === 0) return;
 
-    console.log('[Debug] Subscribing to Twelve Data symbols:', twelveDataSymbols);
     const apiKey = "467b7dd6f3794630b573c59613400a92";
     const ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${apiKey}`);
     twelveDataWsRef.current = ws;
 
     ws.onopen = () => {
-        console.log('[Debug] Connected to Twelve Data WebSocket.');
         ws.send(JSON.stringify({
             action: 'subscribe',
             params: {
@@ -234,7 +327,6 @@ function App() {
     };
 
     ws.onmessage = (event) => {
-        console.log('[Debug] Received from Twelve Data:', event.data);
         try {
             const data = JSON.parse(event.data);
             if (data.event === 'price' && data.symbol && typeof data.price === 'number') {
@@ -254,10 +346,6 @@ function App() {
         console.error(event);
     };
 
-    ws.onclose = (event) => {
-        console.log(`[Debug] Disconnected from Twelve Data WebSocket. Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
-    };
-
     return () => {
         if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
             ws.close();
@@ -275,26 +363,22 @@ function App() {
     const symbolsToSubscribe = finnhubSymbols.map(s => finnhubSymbolMap.get(s)).filter(Boolean) as string[];
     if (symbolsToSubscribe.length === 0) return;
 
-    console.log('[Debug] Subscribing to Finnhub symbols:', symbolsToSubscribe);
     const finnhubApiKey = "sandbox_c1v3b6a3v3j48d246c2g";
     const ws = new WebSocket(`wss://ws.finnhub.io?token=${finnhubApiKey}`);
     finnhubWsRef.current = ws;
 
     ws.onopen = () => {
-        console.log('[Debug] Connected to Finnhub WebSocket.');
         symbolsToSubscribe.forEach(symbol => {
             ws.send(JSON.stringify({ type: 'subscribe', symbol: symbol }));
         });
     };
 
     ws.onmessage = (event) => {
-        console.log('[Debug] Received from Finnhub:', event.data);
         try {
             const data = JSON.parse(event.data);
             if (data.type === 'trade' && data.data && Array.isArray(data.data)) {
                 data.data.forEach((trade: { p: number; s: string }) => {
                     const appSymbol = reverseFinnhubSymbolMap.get(trade.s);
-                    console.log(`[Debug] Finnhub trade for ${trade.s}, maps to app symbol: ${appSymbol}`);
                     if (appSymbol) {
                         setLivePrices(currentPrices => {
                             const newPrices = new Map(currentPrices);
@@ -312,14 +396,8 @@ function App() {
     };
     
     ws.onerror = (event) => {
-        // Log a descriptive message and then the event object itself for inspection.
-        // This prevents the browser from coercing the event object into the unhelpful "[object Object]" string.
         console.error('[Error] Finnhub WebSocket error occurred. See event object below for details.');
         console.error(event);
-    };
-
-    ws.onclose = (event) => {
-        console.log(`[Debug] Disconnected from Finnhub WebSocket. Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
     };
 
     return () => {
@@ -362,6 +440,7 @@ function App() {
   const handleWalletConnected = (account: string) => {
     setIsConnectWalletModalOpen(false);
     setIsWalletConnected(true);
+    setWalletAddress(account);
     if (tradingMode === 'demo') {
         setTradingMode('live');
     }
@@ -370,6 +449,7 @@ function App() {
 
   const handleDisconnectWallet = () => {
       setIsWalletConnected(false);
+      setWalletAddress('');
       setTradingMode('demo'); // Revert to demo for safety
   };
 
@@ -389,11 +469,25 @@ function App() {
     showAlert('Profile Updated', 'Your profile information has been successfully saved.');
   };
 
-  const handleChangePassword = (current: string, newPass: string) => {
-    // In a real app, you'd validate the current password against a backend.
-    // For this simulation, we'll just show a success message.
-    console.log(`Password change attempt: current=${current.substring(0,1)}..., new=${newPass.substring(0,1)}...`);
-    showAlert('Password Changed', 'Your password has been successfully updated.');
+  const handleChangePassword = (current: string, newPass: string): { success: boolean, message: string } => {
+    if (!currentUser) return { success: false, message: "No user is logged in."};
+
+    const users = loadUsersFromStorage();
+    const user = users[currentUser];
+
+    if (user && user.password === current) {
+      user.password = newPass; // In a real app, hash this
+      try {
+        localStorage.setItem('app_users', JSON.stringify(users));
+        showAlert('Password Changed', 'Your password has been successfully updated.');
+        return { success: true, message: "Password updated." };
+      } catch (error) {
+        return { success: false, message: "Failed to save new password." };
+      }
+    } else {
+      showAlert('Password Change Failed', 'The current password you entered is incorrect.');
+      return { success: false, message: "Incorrect current password." };
+    }
   };
 
   // --- Standard Trading Logic ---
@@ -493,7 +587,6 @@ function App() {
         } else if (quoteAssetPriceUSD > 0) {
             pnlInUSD = pnlInQuoteCurrency * quoteAssetPriceUSD;
         } else {
-            console.warn(`Could not find live conversion rate for ${quoteCurrency} to USD.`);
             pnlInUSD = 0; // Or handle error appropriately
         }
         
@@ -879,10 +972,7 @@ function App() {
         return;
     }
 
-    // 1. Calculate total cost in the pool's native currency
     const totalCostInPoolCurrency = ticketCount * pool.ticketPrice;
-
-    // 2. Get asset data for conversion
     const paymentAsset = walletAssets.find(a => a.symbol === paymentCurrency);
     const poolAsset = walletAssets.find(a => a.symbol === pool.currency);
 
@@ -891,11 +981,9 @@ function App() {
         return;
     }
 
-    // 3. Convert cost to payment currency
     const totalCostInUSD = totalCostInPoolCurrency * poolAsset.priceUSD;
     const costInPaymentCurrency = totalCostInUSD / paymentAsset.priceUSD;
 
-    // 4. Check balance
     if (costInPaymentCurrency > currentBalance) {
         showAlert(
             'Insufficient Funds', 
@@ -906,7 +994,6 @@ function App() {
 
     setIsLoading(true);
     setTimeout(() => {
-        // 5. Deduct converted cost from balance
         if (tradingMode === 'demo') {
             setDemoBalances(prev => ({ ...prev, [paymentCurrency]: (prev[paymentCurrency] || 0) - costInPaymentCurrency }));
         } else {
@@ -921,12 +1008,10 @@ function App() {
             });
         }
 
-        // Update pool ticket count
         setLotteryPools(prev => prev.map(p => 
             p.id === poolId ? { ...p, ticketsSold: p.ticketsSold + ticketCount } : p
         ));
 
-        // Update user's ticket record
         setUserLotteryTickets(prev => {
             const existingEntry = prev.find(t => t.poolId === poolId);
             if (existingEntry) {
@@ -947,39 +1032,34 @@ function App() {
             const pool = lotteryPools.find(p => p.id === poolId);
             if (!pool || pool.status === 'completed') return;
 
-            // Calculate prize pool
             const totalRevenue = pool.ticketsSold * pool.ticketPrice;
             const totalPrizePool = totalRevenue / 2;
             const prizePerWinner = pool.numberOfWinners > 0 ? totalPrizePool / pool.numberOfWinners : 0;
             
             const userTicketEntry = userLotteryTickets.find(t => t.poolId === poolId);
             
-            // --- New Weighted Winner Selection Logic ---
             let userWins = 0;
             if (userTicketEntry && userTicketEntry.numberOfTickets > 0) {
                 let remainingUserTickets = userTicketEntry.numberOfTickets;
                 let remainingTotalTickets = pool.ticketsSold;
 
-                // Simulate drawing a winner for each available prize
                 for (let i = 0; i < pool.numberOfWinners; i++) {
-                    if (remainingTotalTickets <= 0) break; // Stop if no tickets are left to draw
+                    if (remainingTotalTickets <= 0) break;
 
                     const winningTicketNumber = Math.floor(Math.random() * remainingTotalTickets) + 1;
 
                     if (winningTicketNumber <= remainingUserTickets) {
-                        // A user's ticket was drawn
                         userWins++;
                         remainingUserTickets--;
                     }
                     
-                    remainingTotalTickets--; // A ticket is removed from the pool
+                    remainingTotalTickets--;
                 }
             }
             const userIsWinner = userWins > 0;
             const totalWinnings = prizePerWinner * userWins;
             
             if (userIsWinner) {
-                // Update user balance
                 const currency = pool.currency;
                 if (tradingMode === 'demo') {
                     setDemoBalances(prev => ({ ...prev, [currency]: (prev[currency] || 0) + totalWinnings }));
@@ -994,11 +1074,9 @@ function App() {
                         currency: currency
                     });
                 }
-                // Mark user as winner and store number of wins
                 setUserLotteryTickets(prev => prev.map(t => t.poolId === poolId ? { ...t, winsCount: userWins } : t));
             }
 
-            // Update pool status
             setLotteryPools(prev => prev.map(p => 
                 p.id === poolId ? { 
                     ...p, 
@@ -1008,7 +1086,6 @@ function App() {
                 } : p
             ));
             
-            // Only show an alert if the user participated in this specific lottery
             if (userTicketEntry && userTicketEntry.numberOfTickets > 0) {
                 const resultMessage = userIsWinner 
                     ? `Congratulations! You won ${userWins} time${userWins > 1 ? 's' : ''}, for a total of ${totalWinnings.toLocaleString()} ${pool.currency}!`
@@ -1029,7 +1106,7 @@ function App() {
                     }
                 }
             });
-        }, 2000); // Check every 2 seconds
+        }, 2000);
 
         return () => clearInterval(interval);
 
@@ -1037,23 +1114,53 @@ function App() {
 
 
   // --- Wallet and Funding ---
-  const handleFundWallet = (amount: number) => {
-      setIsFundModalOpen(false);
-      setIsLoading(true);
-      setTimeout(() => {
-          // Fund the USD asset in the wallet directly
-          setWalletAssets(prev => prev.map(asset => 
-            asset.symbol === 'USD' ? { ...asset, balance: asset.balance + amount } : asset
-          ));
-          addWalletTransaction({
-            type: 'Deposit',
-            description: 'Funds added to wallet',
-            amount: amount,
-            currency: 'USD'
-          });
-          setIsLoading(false);
-          setAlertInfo({ isOpen: true, title: 'Funds Added', message: `${amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} has been successfully added to your wallet.` });
-      }, 1500);
+  const handleDeposit = (amount: number, txHash: string) => {
+      setWalletAssets(prev => prev.map(asset => 
+        asset.symbol === 'USD' ? { ...asset, balance: asset.balance + amount } : asset
+      ));
+      addWalletTransaction({
+        type: 'Deposit',
+        description: `Wallet funded via transaction: ${txHash.substring(0,10)}...`,
+        amount: amount,
+        currency: 'USD'
+      });
+      showAlert('Funds Added', `${amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} has been successfully added to your wallet.`);
+  };
+
+  const handleWithdraw = (amount: number, currency: string, address: string, network: string, usdValue: number) => {
+    const asset = walletAssets.find(a => a.symbol === currency);
+
+    if (tradingMode !== 'live') {
+        showAlert('Demo Mode', 'Withdrawals are only available in live mode.');
+        return;
+    }
+    if (!asset || asset.balance < amount) {
+        showAlert('Insufficient Funds', `You do not have enough ${currency} to withdraw.`);
+        return;
+    }
+    if (amount <= 0) {
+        showAlert('Invalid Amount', 'Please enter a positive amount to withdraw.');
+        return;
+    }
+    if (!address.trim()) {
+        showAlert('Invalid Address', 'Please enter a valid withdrawal address.');
+        return;
+    }
+
+    setIsLoading(true);
+    setTimeout(() => {
+        setWalletAssets(prev => prev.map(a =>
+            a.symbol === currency ? { ...a, balance: a.balance - amount } : a
+        ));
+        addWalletTransaction({
+            type: 'Withdrawal',
+            description: `Withdrawal of ${usdValue.toFixed(2)} USDT (${amount.toFixed(6)} ${currency}) to ${address.substring(0, 6)}... via ${network}`,
+            amount: -amount,
+            currency: currency,
+        });
+        setIsLoading(false);
+        showAlert('Withdrawal Submitted', `Your request to withdraw ${amount.toLocaleString()} ${currency} has been submitted.`);
+    }, 1500);
   };
 
   const handleSwapAssets = (fromSymbol: string, toSymbol: string, fromAmount: number, toAmount: number) => {
@@ -1071,7 +1178,7 @@ function App() {
      addWalletTransaction({
         type: 'Swap',
         description: `Swapped ${fromAmount.toFixed(4)} ${fromSymbol} for ${toAmount.toFixed(4)} ${toSymbol}`,
-        amount: toAmount, // Log the received amount
+        amount: toAmount,
         currency: toSymbol,
     });
     setAlertInfo({
@@ -1088,7 +1195,6 @@ function App() {
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   
   const totalBalanceUSD = useMemo(() => {
-    // Per user request, the sidebar balance should always reflect the live wallet total.
     return walletAssets.reduce((total, asset) => total + (asset.balance * asset.priceUSD), 0);
   }, [walletAssets]);
 
@@ -1098,7 +1204,6 @@ function App() {
         case 'tradeOption':
             return (
                 <main className="flex-grow p-4 grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {/* Main Content: Chart and History */}
                     <div className="lg:col-span-3 xl:col-span-4 flex flex-col gap-4">
                         <div className="flex-grow h-[60vh] lg:h-auto lg:flex-auto">
                             <ChartPanel 
@@ -1124,7 +1229,6 @@ function App() {
                         </div>
                     </div>
                     
-                    {/* Side Panel: Trade Panel */}
                     <div className="lg:col-span-1 xl:col-span-1 flex flex-col gap-4 h-full">
                         <div className="h-full">
                             {view === 'trade' ? (
@@ -1137,7 +1241,7 @@ function App() {
                                     isWalletConnected={isWalletConnected}
                                     onPlaceOrder={handlePlaceOrder}
                                     onConnectWallet={handleConnectWallet}
-                                    onFundClick={() => setIsFundModalOpen(true)}
+                                    onFundClick={() => setView('depositWithdraw')}
                                     selectedTradingCurrency={selectedTradingCurrency}
                                 />
                             ) : (
@@ -1150,7 +1254,7 @@ function App() {
                                     isWalletConnected={isWalletConnected}
                                     onPlaceOptionOrder={handlePlaceOptionOrder}
                                     onConnectWallet={handleConnectWallet}
-                                    onFundClick={() => setIsFundModalOpen(true)}
+                                    onFundClick={() => setView('depositWithdraw')}
                                     selectedTradingCurrency={selectedTradingCurrency}
                                 />
                             )}
@@ -1230,11 +1334,33 @@ function App() {
                     />
                 </main>
             );
+        case 'depositWithdraw':
+            return (
+                <main className="flex-grow p-4 lg:p-6">
+                    <DepositWithdrawPage
+                        walletAssets={walletAssets}
+                        transactions={walletTransactions}
+                        onDeposit={handleDeposit}
+                        onWithdraw={handleWithdraw}
+                        isWalletConnected={isWalletConnected}
+                        walletAddress={walletAddress}
+                        onConnectWallet={handleConnectWallet}
+                        showAlert={showAlert}
+                    />
+                </main>
+            );
         default:
              return <main className="flex-grow p-4"><div className="text-center text-gray-500">Coming Soon</div></main>;
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+        <Suspense fallback={<LoadingSpinner isOpen={true} />}>
+            <AuthPage onLogin={handleLogin} onRegister={handleRegister} />
+        </Suspense>
+    );
+  }
 
   return (
     <div className="bg-[#0D1117] text-white min-h-screen flex flex-col">
@@ -1251,6 +1377,7 @@ function App() {
             stakingHistoryCount={userStakes.length}
             lotteryHistoryCount={userLotteryTickets.length}
             walletHistoryCount={walletTransactions.length}
+            onLogout={handleLogout}
           />
       </Suspense>
       <Header 
@@ -1286,7 +1413,7 @@ function App() {
         <FundWalletModal 
           isOpen={isFundModalOpen}
           onClose={() => setIsFundModalOpen(false)}
-          onFund={handleFundWallet}
+          onDeposit={(amount) => handleDeposit(amount, 'Manual Addition')}
         />
         <AlertModal 
           isOpen={alertInfo.isOpen}
