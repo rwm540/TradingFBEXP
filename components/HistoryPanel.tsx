@@ -27,7 +27,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ openOrders, tradeHistory, l
                         <th scope="col" className="px-4 py-3">Leverage</th>
                         <th scope="col" className="px-4 py-3">Size</th>
                         <th scope="col" className="px-4 py-3">Entry Price</th>
-                        <th scope="col" className="px-4 py-3">P/L (USD)</th>
+                        <th scope="col" className="px-4 py-3">P/L</th>
                         <th scope="col" className="px-4 py-3">Time</th>
                         <th scope="col" className="px-4 py-3"></th>
                     </tr>
@@ -37,6 +37,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ openOrders, tradeHistory, l
                         const currentPrice = livePrices.get(trade.pair);
                         let pnlInQuoteCurrency: number | null = null;
                         let pnlInUSD: number | null = null;
+                        let pnlInTradeCurrency: number | null = null;
 
                         if (currentPrice) {
                             if (trade.type === 'Buy') {
@@ -54,9 +55,21 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ openOrders, tradeHistory, l
                                     pnlInUSD = pnlInQuoteCurrency * quoteAssetPriceUSD;
                                 }
                             }
+
+                            if (pnlInUSD !== null) {
+                                const marginCurrency = trade.currency;
+                                if (marginCurrency === 'USD') {
+                                    pnlInTradeCurrency = pnlInUSD;
+                                } else {
+                                    const marginAssetPriceUSD = walletAssets.find(a => a.symbol === marginCurrency)?.priceUSD ?? 1;
+                                    if (marginAssetPriceUSD > 0) {
+                                        pnlInTradeCurrency = pnlInUSD / marginAssetPriceUSD;
+                                    }
+                                }
+                            }
                         }
                         
-                        const pnlColor = pnlInUSD === null ? 'text-gray-400' : pnlInUSD >= 0 ? 'text-green-500' : 'text-red-500';
+                        const pnlColor = pnlInTradeCurrency === null ? 'text-gray-400' : pnlInTradeCurrency >= 0 ? 'text-green-500' : 'text-red-500';
                         const [tradeBaseCurrency] = trade.pair.split('/');
 
                         return (
@@ -67,7 +80,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ openOrders, tradeHistory, l
                                 <td className="px-4 py-3">{trade.leverage}x</td>
                                 <td className="px-4 py-3">{trade.amount.toFixed(4)} {tradeBaseCurrency}</td>
                                 <td className="px-4 py-3">{formatPrice(trade.pair, trade.price)}</td>
-                                <td className={`px-4 py-3 font-mono ${pnlColor}`}>{pnlInUSD !== null ? pnlInUSD.toFixed(2) : '-'}</td>
+                                <td className={`px-4 py-3 font-mono ${pnlColor}`}>{pnlInTradeCurrency !== null ? `${pnlInTradeCurrency.toFixed(2)} ${trade.currency}` : '-'}</td>
                                 <td className="px-4 py-3">{trade.time}</td>
                                 <td className="px-4 py-3 text-right">
                                     <button
@@ -100,13 +113,13 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ openOrders, tradeHistory, l
                         <th scope="col" className="px-4 py-3">Entry Price</th>
                         <th scope="col" className="px-4 py-3">Close Price</th>
                         <th scope="col" className="px-4 py-3">P/L %</th>
-                        <th scope="col" className="px-4 py-3">P/L (USD)</th>
+                        <th scope="col" className="px-4 py-3">P/L</th>
                         <th scope="col" className="px-4 py-3">Close Time</th>
                     </tr>
                 </thead>
                 <tbody>
                     {tradeHistory.map((trade) => {
-                        const pnlColor = trade.pnlInUSD === undefined ? 'text-gray-400' : trade.pnlInUSD >= 0 ? 'text-green-500' : 'text-red-500';
+                        const pnlColor = trade.pnlInTradeCurrency === undefined ? 'text-gray-400' : trade.pnlInTradeCurrency >= 0 ? 'text-green-500' : 'text-red-500';
                         const pnlPercent = trade.pnlInTradeCurrency !== undefined && trade.margin > 0 ? (trade.pnlInTradeCurrency / trade.margin) * 100 : 0;
                         return (
                              <tr key={trade.id} className="border-b border-gray-700 hover:bg-gray-800">
@@ -117,7 +130,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ openOrders, tradeHistory, l
                                 <td className="px-4 py-3">{formatPrice(trade.pair, trade.price)}</td>
                                 <td className="px-4 py-3">{trade.closePrice ? formatPrice(trade.pair, trade.closePrice) : '-'}</td>
                                 <td className={`px-4 py-3 font-mono ${pnlColor}`}>{pnlPercent.toFixed(2)}%</td>
-                                <td className={`px-4 py-3 font-mono ${pnlColor}`}>{trade.pnlInUSD?.toFixed(2) ?? '-'}</td>
+                                <td className={`px-4 py-3 font-mono ${pnlColor}`}>{trade.pnlInTradeCurrency?.toFixed(2) ?? '-'} {trade.currency}</td>
                                 <td className="px-4 py-3">{trade.closeTime}</td>
                             </tr>
                         );

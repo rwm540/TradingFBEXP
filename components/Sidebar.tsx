@@ -1,11 +1,13 @@
 import React from 'react';
 import type { View } from '../App';
+import type { UserProfile } from '../types';
 
 interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
     onViewChange: (view: View) => void;
     totalBalanceUSD: number;
+    userProfile: UserProfile;
     tradeHistoryCount: number;
     optionHistoryCount: number;
     stakingHistoryCount: number;
@@ -29,7 +31,7 @@ const SidebarLink: React.FC<{
 
 
 const Sidebar: React.FC<SidebarProps> = ({ 
-    isOpen, onClose, onViewChange, totalBalanceUSD,
+    isOpen, onClose, onViewChange, totalBalanceUSD, userProfile,
     tradeHistoryCount, optionHistoryCount, stakingHistoryCount, lotteryHistoryCount, walletHistoryCount
 }) => {
     
@@ -37,6 +39,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         onViewChange(view);
         onClose();
     };
+    
+    const displayName = userProfile.firstName && userProfile.lastName ? `${userProfile.firstName} ${userProfile.lastName}` : userProfile.username;
 
     return (
         <>
@@ -55,20 +59,38 @@ const Sidebar: React.FC<SidebarProps> = ({
                     {/* Header with Profile */}
                     <div className="flex items-center justify-between p-4 border-b border-gray-700">
                         <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-600 flex items-center justify-center text-white font-bold text-xl">
-                                U
-                            </div>
+                            {userProfile.profilePicture ? (
+                                <img src={userProfile.profilePicture} alt="Profile" className="w-12 h-12 rounded-full object-cover" />
+                            ) : (
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-600 flex items-center justify-center text-white font-bold text-xl">
+                                    {userProfile.firstName.charAt(0).toUpperCase()}
+                                </div>
+                            )}
                             <div>
-                                <h2 id="sidebar-title" className="text-lg font-bold text-white">User One</h2>
+                                <h2 id="sidebar-title" className="text-lg font-bold text-white">{displayName}</h2>
                                 <p className="text-sm font-mono text-gray-400">${totalBalanceUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                         </div>
                         <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl" aria-label="Close sidebar">&times;</button>
                     </div>
 
-                    {/* Transaction Links */}
+                    {/* Navigation Links */}
                     <div className="flex-grow overflow-y-auto p-2">
                         <nav className="flex flex-col space-y-1">
+                             <button
+                                onClick={() => handleNavigation('profile')}
+                                className="w-full flex justify-between items-center p-3 text-left text-gray-300 rounded-md hover:bg-gray-800 hover:text-white transition-colors"
+                            >
+                                <span className="font-medium">Profile Settings</span>
+                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                            
+                            <div className="pt-2 mt-2 border-t border-gray-700">
+                                <span className="px-3 text-xs font-semibold text-gray-500 uppercase">History</span>
+                            </div>
+
                             <SidebarLink onClick={() => handleNavigation('walletHistory')} count={walletHistoryCount}>
                                 Wallet History
                             </SidebarLink>

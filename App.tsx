@@ -1,7 +1,9 @@
+
+
 import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Header from './components/Header';
 import LoadingSpinner from './components/LoadingSpinner';
-import type { Currency, Trade, NewOrderRequest, AssetType, OptionTrade, NewOptionOrderRequest, WalletAsset, TradingCurrency, StakingPool, UserStake, LotteryPool, UserLotteryTicket, WalletTransaction } from './types';
+import type { Currency, Trade, NewOrderRequest, AssetType, OptionTrade, NewOptionOrderRequest, WalletAsset, TradingCurrency, StakingPool, UserStake, LotteryPool, UserLotteryTicket, WalletTransaction, UserProfile } from './types';
 import { currencyPairs, cryptoPairs, stockSymbols, commodityPairs, initialAssetsData, allTradablePairs, initialStakingPools, initialLotteryPools } from './constants';
 import type { OrderConfirmationDetails } from './components/ConfirmationModal';
 import type { OptionConfirmationDetails } from './components/OptionConfirmationModal';
@@ -26,16 +28,48 @@ const OptionHistoryPage = React.lazy(() => import('./components/OptionHistoryPag
 const StakingHistoryPage = React.lazy(() => import('./components/StakingHistoryPage'));
 const LotteryHistoryPage = React.lazy(() => import('./components/LotteryHistoryPage'));
 const WalletHistoryPage = React.lazy(() => import('./components/WalletHistoryPage'));
+const ProfilePage = React.lazy(() => import('./components/ProfilePage'));
 
 
 export type TradingMode = 'demo' | 'live';
-export type View = 'trade' | 'tradeOption' | 'stacking' | 'lottery' | 'wallet' | 'tradeHistory' | 'optionHistory' | 'stakingHistory' | 'lotteryHistory' | 'walletHistory';
+export type View = 'trade' | 'tradeOption' | 'stacking' | 'lottery' | 'wallet' | 'tradeHistory' | 'optionHistory' | 'stakingHistory' | 'lotteryHistory' | 'walletHistory' | 'profile';
 
 function App() {
   const [view, setView] = useState<View>('trade');
   const [tradingMode, setTradingMode] = useState<TradingMode>('demo');
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // --- User Profile State ---
+  const [userProfile, setUserProfile] = useState<UserProfile>({
+    username: 'User One',
+    firstName: 'User',
+    lastName: 'One',
+    email: 'user.one@example.com',
+    profilePicture: null, // Will store a Base64 string
+  });
+  
+  // Load user profile from localStorage on initial mount
+  useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem('userProfile');
+      if (savedProfile) {
+        setUserProfile(JSON.parse(savedProfile));
+      }
+    } catch (error) {
+      console.error("Failed to parse user profile from localStorage", error);
+    }
+  }, []);
+
+  // Save user profile to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('userProfile', JSON.stringify(userProfile));
+    } catch (error) {
+      console.error("Failed to save user profile to localStorage", error);
+    }
+  }, [userProfile]);
+
 
   // --- Multi-Currency Balances ---
   const initialDemoBalances = useMemo(() => {
@@ -347,6 +381,19 @@ function App() {
             ...transaction
         }, ...prev]);
     }
+  };
+
+  // --- Profile Logic ---
+  const handleUpdateProfile = (newProfile: UserProfile) => {
+    setUserProfile(newProfile);
+    showAlert('Profile Updated', 'Your profile information has been successfully saved.');
+  };
+
+  const handleChangePassword = (current: string, newPass: string) => {
+    // In a real app, you'd validate the current password against a backend.
+    // For this simulation, we'll just show a success message.
+    console.log(`Password change attempt: current=${current.substring(0,1)}..., new=${newPass.substring(0,1)}...`);
+    showAlert('Password Changed', 'Your password has been successfully updated.');
   };
 
   // --- Standard Trading Logic ---
@@ -810,9 +857,9 @@ function App() {
   };
 
   // --- Lottery Logic ---
-  const handleBuyTickets = (poolId: string, ticketCount: number, currency: string) => {
+  const handleBuyTickets = (poolId: string, ticketCount: number, paymentCurrency: string) => {
     const pool = lotteryPools.find(p => p.id === poolId);
-    const currentBalance = balances[currency] ?? 0;
+    const currentBalance = balances[paymentCurrency] ?? 0;
 
     if (!pool) {
         showAlert('Error', 'Lottery pool not found.');
@@ -831,26 +878,46 @@ function App() {
         showAlert('Not Enough Tickets', `Only ${ticketsAvailable.toLocaleString()} tickets are left for this lottery.`);
         return;
     }
-    const totalCost = ticketCount * pool.ticketPrice;
-    if (totalCost > currentBalance) {
-        showAlert('Insufficient Funds', `You need ${totalCost.toLocaleString()} ${currency} to buy ${ticketCount} tickets.`);
+
+    // 1. Calculate total cost in the pool's native currency
+    const totalCostInPoolCurrency = ticketCount * pool.ticketPrice;
+
+    // 2. Get asset data for conversion
+    const paymentAsset = walletAssets.find(a => a.symbol === paymentCurrency);
+    const poolAsset = walletAssets.find(a => a.symbol === pool.currency);
+
+    if (!paymentAsset || !poolAsset || paymentAsset.priceUSD <= 0 || poolAsset.priceUSD <= 0) {
+        showAlert('Conversion Error', `Could not determine the value of currencies for conversion.`);
+        return;
+    }
+
+    // 3. Convert cost to payment currency
+    const totalCostInUSD = totalCostInPoolCurrency * poolAsset.priceUSD;
+    const costInPaymentCurrency = totalCostInUSD / paymentAsset.priceUSD;
+
+    // 4. Check balance
+    if (costInPaymentCurrency > currentBalance) {
+        showAlert(
+            'Insufficient Funds', 
+            `You need ${costInPaymentCurrency.toFixed(6)} ${paymentCurrency} (worth ${totalCostInPoolCurrency.toLocaleString()} ${pool.currency}) to buy ${ticketCount} tickets.`
+        );
         return;
     }
 
     setIsLoading(true);
     setTimeout(() => {
-        // Deduct cost from balance
+        // 5. Deduct converted cost from balance
         if (tradingMode === 'demo') {
-            setDemoBalances(prev => ({ ...prev, [currency]: (prev[currency] || 0) - totalCost }));
+            setDemoBalances(prev => ({ ...prev, [paymentCurrency]: (prev[paymentCurrency] || 0) - costInPaymentCurrency }));
         } else {
             setWalletAssets(prev => prev.map(asset => 
-                asset.symbol === currency ? { ...asset, balance: asset.balance - totalCost } : asset
+                asset.symbol === paymentCurrency ? { ...asset, balance: asset.balance - costInPaymentCurrency } : asset
             ));
              addWalletTransaction({
                 type: 'Lottery Purchase',
                 description: `${ticketCount} ticket(s) for "${pool.title}"`,
-                amount: -totalCost,
-                currency: currency
+                amount: -costInPaymentCurrency,
+                currency: paymentCurrency
             });
         }
 
@@ -1021,12 +1088,9 @@ function App() {
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   
   const totalBalanceUSD = useMemo(() => {
-    const assetsSource = tradingMode === 'demo' ? 
-        initialAssetsData.map(asset => ({...asset, balance: demoBalances[asset.symbol] ?? 0})) 
-        : walletAssets;
-    
-    return assetsSource.reduce((total, asset) => total + (asset.balance * asset.priceUSD), 0);
-  }, [tradingMode, walletAssets, demoBalances]);
+    // Per user request, the sidebar balance should always reflect the live wallet total.
+    return walletAssets.reduce((total, asset) => total + (asset.balance * asset.priceUSD), 0);
+  }, [walletAssets]);
 
   const renderCurrentView = () => {
     switch(view) {
@@ -1038,6 +1102,7 @@ function App() {
                     <div className="lg:col-span-3 xl:col-span-4 flex flex-col gap-4">
                         <div className="flex-grow h-[60vh] lg:h-auto lg:flex-auto">
                             <ChartPanel 
+                                key={selectedPair.value}
                                 selectedPair={selectedPair}
                             />
                         </div>
@@ -1155,6 +1220,16 @@ function App() {
                     <WalletHistoryPage transactions={walletTransactions} />
                 </main>
             );
+        case 'profile':
+            return (
+                <main className="flex-grow p-4 lg:p-6">
+                    <ProfilePage 
+                        userProfile={userProfile}
+                        onUpdateProfile={handleUpdateProfile}
+                        onChangePassword={handleChangePassword}
+                    />
+                </main>
+            );
         default:
              return <main className="flex-grow p-4"><div className="text-center text-gray-500">Coming Soon</div></main>;
     }
@@ -1170,6 +1245,7 @@ function App() {
             onClose={toggleSidebar}
             onViewChange={handleViewChange}
             totalBalanceUSD={totalBalanceUSD}
+            userProfile={userProfile}
             tradeHistoryCount={tradeHistory.length}
             optionHistoryCount={optionTradeHistory.length}
             stakingHistoryCount={userStakes.length}

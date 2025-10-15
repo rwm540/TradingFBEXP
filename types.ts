@@ -31,14 +31,20 @@ export type NewOrderRequest = {
     currency: TradingCurrency;
 }
 
-export type AssetType = 'forex' | 'crypto' | 'stocks' | 'commodities';
+export type AssetType = 'forex' | 'crypto' | 'stock' | 'commodity';
+
+export interface OrderBookEntry {
+    price: string;
+    amount: string;
+    total: string;
+}
 
 export interface OptionTrade {
     id: string;
     pair: string;
-    type: 'Buy' | 'Sell'; // 'Buy' for Higher, 'Sell' for Lower
+    type: 'Buy' | 'Sell';
     entryPrice: number;
-    amount: number; // The amount staked
+    amount: number;
     duration: number; // in seconds
     profitPercentage: number;
     openTime: number; // timestamp
@@ -46,8 +52,8 @@ export interface OptionTrade {
     status: 'Active' | 'Won' | 'Lost';
     currency: TradingCurrency;
     closePrice?: number;
-    payout?: number; // amount + profit
-    profit?: number; // profit or loss amount
+    payout?: number;
+    profit?: number;
 }
 
 export type NewOptionOrderRequest = {
@@ -59,71 +65,71 @@ export type NewOptionOrderRequest = {
     currency: TradingCurrency;
 }
 
-// FIX: Added missing OrderBookEntry interface.
-export interface OrderBookEntry {
-    price: string;
-    amount: string;
-    total: string;
-}
-
 export interface WalletAsset {
     name: string;
-    symbol: string;
+    symbol: TradingCurrency;
     balance: number;
     priceUSD: number;
     accountNumber: string;
 }
 
 export interface StakingPool {
-  id: string;
-  title: string;
-  assets: string[];
-  description: string;
-  totalGoal: number;
-  currentAmount: number;
-  startDate: string;
-  endDate: number; // as timestamp for calculations
-  dailyROI: number; // as a percentage, e.g., 0.05 for 0.05%
-  totalAPY: number; // as a percentage
+    id: string;
+    title: string;
+    assets: TradingCurrency[];
+    description: string;
+    totalGoal: number;
+    currentAmount: number;
+    startDate: string;
+    endDate: number; // timestamp
+    dailyROI: number;
+    totalAPY: number;
 }
 
 export interface UserStake {
     id: string;
     poolId: string;
     amount: number;
-    currency: string;
+    currency: TradingCurrency;
     stakedAt: number; // timestamp
-    lastProfitWithdrawalAt?: number;
+    lastProfitWithdrawalAt?: number; // timestamp
 }
 
 export interface LotteryPool {
     id: string;
     title: string;
-    prizeIcon: string;
+    prizeIcon: TradingCurrency;
     type: 'time' | 'ticket';
     numberOfWinners: number;
     ticketPrice: number;
-    currency: string;
+    currency: TradingCurrency;
     totalTickets: number;
     ticketsSold: number;
-    drawDate?: number; // Optional timestamp, for time-based lotteries
+    drawDate?: number; // timestamp, for time-based lotteries
     status: 'active' | 'completed';
     totalPrizePool?: number;
     prizePerWinner?: number;
 }
 
-
 export interface UserLotteryTicket {
     poolId: string;
     numberOfTickets: number;
-    winsCount?: number;
+    winsCount?: number; // How many times the user won in this pool
 }
 
 export interface WalletTransaction {
     id: string;
     timestamp: number;
-    type: 'Deposit' | 'Swap' | 'Trade Margin' | 'Trade P/L' | 'Option Stake' | 'Option Payout' | 'Staking Deposit' | 'Staking Withdrawal' | 'Lottery Purchase' | 'Lottery Win';
+    type: 'Deposit' | 'Withdrawal' | 'Trade Margin' | 'Trade P/L' | 'Option Stake' | 'Option Payout' | 'Swap' | 'Staking Deposit' | 'Staking Withdrawal' | 'Lottery Purchase' | 'Lottery Win';
     description: string;
-    amount: number; // Can be positive or negative
-    currency: string;
+    amount: number;
+    currency: TradingCurrency;
+}
+
+export interface UserProfile {
+    username: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    profilePicture: string | null; // Base64 encoded string
 }

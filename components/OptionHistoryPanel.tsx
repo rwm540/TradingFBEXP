@@ -27,13 +27,13 @@ const PositionRow: React.FC<{trade: OptionTrade}> = ({ trade }) => {
         <tr className="border-b border-gray-700 hover:bg-gray-800">
             <td className="px-4 py-3 text-white font-medium">{trade.pair}</td>
             <td className={`px-4 py-3 font-bold ${trade.type === 'Buy' ? 'text-green-500' : 'text-red-500'}`}>{trade.type === 'Buy' ? 'Higher' : 'Lower'}</td>
-            <td className="px-4 py-3">{trade.amount.toLocaleString('en-US', {style: 'currency', currency: 'USD'})}</td>
+            <td className="px-4 py-3">{trade.amount.toLocaleString('en-US', {minimumFractionDigits: 2})} {trade.currency}</td>
             <td className="px-4 py-3 font-mono text-green-400">
-                {potentialProfit.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                {potentialProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })} {trade.currency}
             </td>
             <td className="px-4 py-3">{formatPrice(trade.pair, trade.entryPrice)}</td>
             <td className="px-4 py-3">{formatDisplayDuration(trade.duration)}</td>
-            <td className="px-f-4 py-3 font-mono text-yellow-400">{timeLeft > 60 ? formatDisplayDuration(timeLeft) : formatDuration(timeLeft)}</td>
+            <td className="px-4 py-3 font-mono text-yellow-400">{timeLeft > 60 ? formatDisplayDuration(Math.floor(timeLeft)) : formatDuration(timeLeft)}</td>
         </tr>
     );
 };
@@ -92,12 +92,12 @@ const OptionHistoryPanel: React.FC<OptionHistoryPanelProps> = ({ openOptionOrder
                              <tr key={trade.id} className="border-b border-gray-700 hover:bg-gray-800">
                                 <td className="px-4 py-3 text-white font-medium">{trade.pair}</td>
                                 <td className={`px-4 py-3 font-bold ${trade.type === 'Buy' ? 'text-green-500' : 'text-red-500'}`}>{trade.type === 'Buy' ? 'Higher' : 'Lower'}</td>
-                                <td className="px-4 py-3">{trade.amount.toLocaleString('en-US', {style: 'currency', currency: 'USD'})}</td>
+                                <td className="px-4 py-3">{trade.amount.toLocaleString('en-US', {minimumFractionDigits: 2})} {trade.currency}</td>
                                 <td className="px-4 py-3">{formatPrice(trade.pair, trade.entryPrice)}</td>
                                 <td className="px-4 py-3">{trade.closePrice ? formatPrice(trade.pair, trade.closePrice) : '-'}</td>
                                 <td className={`px-4 py-3 font-bold ${resultColor}`}>{trade.status}</td>
                                 <td className={`px-4 py-3 font-mono ${resultColor}`}>{profitPercent}</td>
-                                <td className={`px-4 py-3 font-mono ${resultColor}`}>{trade.profit?.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) ?? '0.00'}</td>
+                                <td className={`px-4 py-3 font-mono ${resultColor}`}>{trade.profit?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '0.00'} {trade.currency}</td>
                             </tr>
                         );
                     })}
